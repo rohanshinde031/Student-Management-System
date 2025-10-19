@@ -1,0 +1,46 @@
+trigger:
+- main
+
+pool:
+  vmImage: ubuntu-latest
+
+variables:
+  azureSubscription: '342dbacb-3a0d-465c-b581-c79239c993f8'
+  webAppName: 'myWService'  # e.g., myWService
+
+steps:
+- script: echo "Starting manual Java build..."
+  displayName: 'Start Build'
+
+# Compile .java files
+- script: |
+    mkdir -p build/classes
+    find src -name "*.java" > sources.txt
+    javac -d build/classes @sources.txt
+  displayName: 'Compile Java source files'
+
+# Package as WAR
+- script: |
+    mkdir -p package/WEB-INF/classes
+    cp -r build/classes/* package/WEB-INF/classes/
+    cp -r web/WEB-INF/* package/WEB-INF/
+    cd package
+    jar -cvf ../app.war *
+  displayName: 'Package WAR file'
+
+# Upload WAR as pipeline artifact (optional)
+- task: CopyFiles@2
+  inputs:
+    SourceFolder: '$(System.DefaultWorkingDirectory)'
+    Contents: 'app.war'
+    TargetFolder: '$(Build.ArtifactStagingDirectory)'
+  displayName: 'Copy WAR to staging'
+
+# Deploy to Azure Web App (Linux)
+- task: AzureWebApp@1
+  displayName: 'Deploy WAR to Azure App Service'
+  inputs:
+    azureSubscription: $(azureSubscription)
+    appType: webAppLinux
+    appName: $(webAppName)
+    package: '$(Build.ArtifactStagingDirectory)/app.war'
